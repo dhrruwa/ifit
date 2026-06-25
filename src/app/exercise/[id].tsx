@@ -1,7 +1,7 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import { LineChart } from 'react-native-gifted-charts';
 
+import { MiniLineChart } from '@/components/MiniLineChart';
 import { Screen } from '@/components/Screen';
 import { Body, Card, Pill, Row, SectionTitle } from '@/components/ui';
 import { getExercise } from '@/data/exercises';
@@ -66,20 +66,11 @@ export default function ExerciseScreen() {
                 </Text>
               </Row>
               {series.length >= 2 ? (
-                <LineChart
+                <MiniLineChart
                   data={series.map((p) => ({ value: toDisplay(p.value, units), label: p.label }))}
                   color={colors.accent}
-                  thickness={3}
-                  dataPointsColor={colors.accent}
-                  hideRules
-                  yAxisColor="transparent"
-                  xAxisColor={colors.border}
-                  yAxisTextStyle={{ color: colors.textFaint, fontSize: 10 }}
-                  xAxisLabelTextStyle={{ color: colors.textFaint, fontSize: 9 }}
                   height={140}
-                  adjustToWidth
-                  initialSpacing={12}
-                  noOfSections={3}
+                  suffix={units}
                 />
               ) : (
                 <Body style={{ color: colors.textDim }}>

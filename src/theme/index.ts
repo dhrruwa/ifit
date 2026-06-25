@@ -1,5 +1,3 @@
-import '@/global.css';
-
 /**
  * iFit dark theme. Day accent colors mirror the training bible's
  * color-coding (Push=blue, Pull=green, Legs=red, Upper=purple, Lower=brown).

@@ -15,7 +15,9 @@ export interface ActiveSession {
 interface WorkoutState {
   sessions: WorkoutSession[];
   active: ActiveSession | null;
+  favorites: string[];
 
+  toggleFavorite: (exerciseId: string) => void;
   startWorkout: (dayId: string) => void;
   updateSet: (exerciseId: string, index: number, patch: Partial<LoggedSet>) => void;
   toggleDone: (exerciseId: string, index: number) => void;
@@ -50,6 +52,14 @@ export const useWorkoutStore = create<WorkoutState>()(
     (set, get) => ({
       sessions: [],
       active: null,
+      favorites: [],
+
+      toggleFavorite: (exerciseId) =>
+        set((state) => ({
+          favorites: state.favorites.includes(exerciseId)
+            ? state.favorites.filter((id) => id !== exerciseId)
+            : [...state.favorites, exerciseId],
+        })),
 
       startWorkout: (dayId) => {
         const entries = buildEntries(dayId, get().sessions);
@@ -149,7 +159,11 @@ export const useWorkoutStore = create<WorkoutState>()(
     {
       name: 'ifit-workouts',
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({ sessions: state.sessions, active: state.active }),
+      partialize: (state) => ({
+        sessions: state.sessions,
+        active: state.active,
+        favorites: state.favorites,
+      }),
     }
   )
 );

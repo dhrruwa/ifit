@@ -1,28 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { ExerciseGif } from '@/components/ExerciseGif';
 import { RestTimer } from '@/components/RestTimer';
-import { Screen } from '@/components/Screen';
-import { Body, Pill, Row } from '@/components/ui';
+import { PrimaryButton } from '@/components/kit';
 import { getExercise } from '@/data/exercises';
 import { getDay } from '@/data/program';
 import { formatDuration } from '@/lib/dates';
+import { haptic } from '@/lib/motion';
+import { lastSetsFor } from '@/lib/prs';
 import { toDisplay, toKg } from '@/lib/units';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
-import { colors, dayColors, font, radius, space } from '@/theme';
+import { colors, dayColors, radius, space, type } from '@/theme';
 
 const REST_SEC = 120;
 
@@ -31,20 +25,23 @@ export default function WorkoutScreen() {
   useKeepAwake();
 
   const active = useWorkoutStore((s) => s.active);
+  const sessions = useWorkoutStore((s) => s.sessions);
   const startWorkout = useWorkoutStore((s) => s.startWorkout);
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
   const cancelWorkout = useWorkoutStore((s) => s.cancelWorkout);
+  const updateSet = useWorkoutStore((s) => s.updateSet);
+  const toggleDone = useWorkoutStore((s) => s.toggleDone);
+  const addSet = useWorkoutStore((s) => s.addSet);
   const units = useSettingsStore((s) => s.units);
 
+  const [idx, setIdx] = useState(0);
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
-  // Ensure a session exists (e.g. on deep link / reload).
   useEffect(() => {
     if (!active && id) startWorkout(id);
   }, [active, id, startWorkout]);
 
-  // Elapsed timer.
   useEffect(() => {
     if (!active) return;
     const tick = () => setElapsed(Math.round((Date.now() - active.startedAt) / 1000));
@@ -64,15 +61,55 @@ export default function WorkoutScreen() {
 
   if (!active || !day) {
     return (
-      <Screen scroll={false}>
-        <Body>Starting workout…</Body>
-      </Screen>
+      <View style={styles.loading}>
+        <Text style={type.bodyDim}>Starting workout…</Text>
+      </View>
     );
   }
+
+  const entries = active.entries;
+  const safeIdx = Math.min(idx, entries.length - 1);
+  const entry = entries[safeIdx];
+  const ex = getExercise(entry.exerciseId);
+  const target = slotMap[entry.exerciseId];
+  const prev = lastSetsFor(sessions, entry.exerciseId);
+
+  const doneCount = (e: typeof entry) => e.sets.filter((s) => s.done).length;
+  const curSetIdx = entry.sets.findIndex((s) => !s.done);
+  const allDone = curSetIdx === -1;
+  const editIdx = allDone ? entry.sets.length - 1 : curSetIdx;
+  const editSet = entry.sets[editIdx];
+
+  const step = units === 'kg' ? 2.5 : 5;
+  const bumpWeight = (delta: number) => {
+    const cur = toDisplay(editSet.weight, units);
+    updateSet(entry.exerciseId, editIdx, { weight: toKg(Math.max(0, cur + delta), units) });
+    haptic.select();
+  };
+  const bumpReps = (delta: number) => {
+    updateSet(entry.exerciseId, editIdx, { reps: Math.max(0, editSet.reps + delta) });
+    haptic.select();
+  };
+
+  const completeSet = () => {
+    if (allDone) {
+      addSet(entry.exerciseId);
+      return;
+    }
+    toggleDone(entry.exerciseId, curSetIdx);
+    haptic.success();
+    setRestEndsAt(Date.now() + REST_SEC * 1000);
+  };
+
+  const goto = (next: number) => {
+    setIdx(Math.max(0, Math.min(entries.length - 1, next)));
+    haptic.tap();
+  };
 
   const onFinish = () => {
     const saved = finishWorkout();
     if (saved) {
+      haptic.success();
       router.dismissAll?.();
       router.replace('/history');
     } else {
@@ -83,14 +120,7 @@ export default function WorkoutScreen() {
   const confirmCancel = () => {
     Alert.alert('Discard workout?', 'Your logged sets will be lost.', [
       { text: 'Keep going', style: 'cancel' },
-      {
-        text: 'Discard',
-        style: 'destructive',
-        onPress: () => {
-          cancelWorkout();
-          router.back();
-        },
-      },
+      { text: 'Discard', style: 'destructive', onPress: () => { cancelWorkout(); router.back(); } },
     ]);
   };
 
@@ -98,45 +128,139 @@ export default function WorkoutScreen() {
     <>
       <Stack.Screen
         options={{
-          title: `${day.name} Workout`,
-          headerTintColor: accent,
+          headerShown: true,
+          title: '',
+          headerStyle: { backgroundColor: colors.bg },
+          headerShadowVisible: false,
           headerLeft: () => (
             <Pressable onPress={confirmCancel} hitSlop={10}>
-              <Text style={{ color: colors.danger, fontWeight: '700', fontSize: font.body }}>
-                Discard
-              </Text>
+              <Text style={[type.headline, { color: colors.danger }]}>Discard</Text>
             </Pressable>
+          ),
+          headerTitle: () => (
+            <View style={{ alignItems: 'center' }}>
+              <Text style={type.headline}>{day.name}</Text>
+              <Text style={[type.caption, { color: accent }]}>{formatDuration(elapsed)}</Text>
+            </View>
           ),
           headerRight: () => (
             <Pressable onPress={onFinish} hitSlop={10}>
-              <Text style={{ color: colors.good, fontWeight: '800', fontSize: font.body }}>
-                Finish
-              </Text>
+              <Text style={[type.headline, { color: colors.good }]}>Finish</Text>
             </Pressable>
           ),
         }}
       />
-      <Screen>
-        <Row style={styles.timerRow}>
-          <Ionicons name="time-outline" size={18} color={colors.textDim} />
-          <Text style={styles.timer}>{formatDuration(elapsed)}</Text>
-          <Text style={styles.timerLabel}>elapsed</Text>
-        </Row>
+      <View style={styles.container}>
+        {/* progress dots */}
+        <View style={styles.dots}>
+          {entries.map((e, i) => {
+            const done = doneCount(e) >= e.sets.length;
+            const on = i === safeIdx;
+            return (
+              <Pressable key={e.exerciseId} onPress={() => goto(i)} style={{ flex: 1 }}>
+                <View
+                  style={[
+                    styles.dot,
+                    { backgroundColor: done ? accent : colors.surface2 },
+                    on && { backgroundColor: done ? accent : colors.borderHi, height: 6 },
+                  ]}
+                />
+              </Pressable>
+            );
+          })}
+        </View>
 
-        {active.entries.map((entry) => (
-          <ExerciseBlock
-            key={entry.exerciseId}
-            exerciseId={entry.exerciseId}
-            target={slotMap[entry.exerciseId]}
-            accent={accent}
-            units={units}
-            onSetCompleted={() => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              setRestEndsAt(Date.now() + REST_SEC * 1000);
-            }}
+        <Animated.ScrollView
+          key={entry.exerciseId}
+          entering={FadeIn.duration(180)}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scroll}>
+          <Text style={type.caption}>
+            Exercise {safeIdx + 1} of {entries.length}
+          </Text>
+          <Pressable onPress={() => router.push(`/exercise/${entry.exerciseId}`)}>
+            <Text style={styles.exName}>{ex?.name}</Text>
+            <Text style={type.bodyDim}>{ex?.regionOrHead}</Text>
+          </Pressable>
+
+          <ExerciseGif exerciseId={entry.exerciseId} height={180} style={{ marginVertical: space.lg }} />
+
+          {/* current set big editor */}
+          <View style={styles.editor}>
+            <Text style={[type.label, { color: accent }]}>
+              {allDone ? 'All sets done' : `Set ${curSetIdx + 1} of ${entry.sets.length}`}
+            </Text>
+            <View style={styles.steppers}>
+              <Stepper
+                label={units.toUpperCase()}
+                value={toDisplay(editSet.weight, units)}
+                onMinus={() => bumpWeight(-step)}
+                onPlus={() => bumpWeight(step)}
+              />
+              <Stepper
+                label="REPS"
+                value={editSet.reps}
+                onMinus={() => bumpReps(-1)}
+                onPlus={() => bumpReps(1)}
+              />
+            </View>
+            {prev?.[editIdx] && (
+              <Text style={[type.caption, { textAlign: 'center', marginTop: space.sm }]}>
+                Last time · {toDisplay(prev[editIdx].weight, units)}
+                {units} × {prev[editIdx].reps}
+              </Text>
+            )}
+          </View>
+
+          <PrimaryButton
+            label={allDone ? 'Add Set' : 'Complete Set'}
+            icon={allDone ? 'add' : 'checkmark'}
+            color={allDone ? colors.surfaceHi : accent}
+            textColor={allDone ? colors.text : colors.accentText}
+            onPress={completeSet}
+            style={{ marginTop: space.lg }}
           />
-        ))}
-      </Screen>
+
+          {/* set list */}
+          <View style={styles.setList}>
+            {entry.sets.map((s, i) => (
+              <Pressable
+                key={i}
+                onPress={() => toggleDone(entry.exerciseId, i)}
+                style={[styles.setRow, i === editIdx && !allDone && { borderColor: accent }]}>
+                <Text style={styles.setNo}>{i + 1}</Text>
+                <Text style={styles.setVal}>
+                  {toDisplay(s.weight, units)}
+                  {units} × {s.reps}
+                </Text>
+                <Ionicons
+                  name={s.done ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={24}
+                  color={s.done ? colors.good : colors.textFaint}
+                />
+              </Pressable>
+            ))}
+          </View>
+
+          {/* exercise nav */}
+          <View style={styles.nav}>
+            <Pressable
+              onPress={() => goto(safeIdx - 1)}
+              disabled={safeIdx === 0}
+              style={[styles.navBtn, safeIdx === 0 && { opacity: 0.3 }]}>
+              <Ionicons name="chevron-back" size={18} color={colors.text} />
+              <Text style={type.caption}>Prev</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => goto(safeIdx + 1)}
+              disabled={safeIdx === entries.length - 1}
+              style={[styles.navBtn, safeIdx === entries.length - 1 && { opacity: 0.3 }]}>
+              <Text style={type.caption}>Next</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.text} />
+            </Pressable>
+          </View>
+        </Animated.ScrollView>
+      </View>
 
       <RestTimer
         endsAt={restEndsAt}
@@ -147,135 +271,79 @@ export default function WorkoutScreen() {
   );
 }
 
-function ExerciseBlock({
-  exerciseId,
-  target,
-  accent,
-  units,
-  onSetCompleted,
+function Stepper({
+  label,
+  value,
+  onMinus,
+  onPlus,
 }: {
-  exerciseId: string;
-  target?: { sets: number; reps: string };
-  accent: string;
-  units: 'kg' | 'lb';
-  onSetCompleted: () => void;
+  label: string;
+  value: number;
+  onMinus: () => void;
+  onPlus: () => void;
 }) {
-  const ex = getExercise(exerciseId);
-  const entry = useWorkoutStore((s) => s.active?.entries.find((e) => e.exerciseId === exerciseId));
-  const updateSet = useWorkoutStore((s) => s.updateSet);
-  const toggleDone = useWorkoutStore((s) => s.toggleDone);
-  const addSet = useWorkoutStore((s) => s.addSet);
-  const removeSet = useWorkoutStore((s) => s.removeSet);
-
-  if (!ex || !entry) return null;
-
   return (
-    <View style={styles.block}>
-      <Pressable onPress={() => router.push(`/exercise/${ex.id}`)}>
-        <Row style={{ justifyContent: 'space-between' }}>
-          <Text style={styles.blockName}>{ex.name}</Text>
-          {target && <Pill label={`target ${target.sets}×${target.reps}`} color={accent} />}
-        </Row>
-        <Text style={styles.blockMeta}>{ex.regionOrHead}</Text>
+    <View style={styles.stepper}>
+      <Pressable onPress={onMinus} style={styles.stepBtn} hitSlop={6}>
+        <Ionicons name="remove" size={22} color={colors.text} />
       </Pressable>
-
-      <ExerciseGif exerciseId={exerciseId} height={150} style={{ marginTop: space.sm }} />
-
-      <Row style={styles.colHead}>
-        <Text style={[styles.colSet]}>SET</Text>
-        <Text style={[styles.colInput, styles.colLbl]}>{units.toUpperCase()}</Text>
-        <Text style={[styles.colInput, styles.colLbl]}>REPS</Text>
-        <View style={styles.colDone} />
-      </Row>
-
-      {entry.sets.map((set, i) => (
-        <Row key={i} style={[styles.setRow, set.done && { backgroundColor: accent + '14' }]}>
-          <Text style={styles.colSet}>{i + 1}</Text>
-          <TextInput
-            style={[styles.input, styles.colInput]}
-            keyboardType="decimal-pad"
-            placeholder="0"
-            placeholderTextColor={colors.textFaint}
-            defaultValue={set.weight ? String(toDisplay(set.weight, units)) : ''}
-            onChangeText={(t) =>
-              updateSet(exerciseId, i, { weight: toKg(parseFloat(t) || 0, units) })
-            }
-          />
-          <TextInput
-            style={[styles.input, styles.colInput]}
-            keyboardType="number-pad"
-            placeholder="0"
-            placeholderTextColor={colors.textFaint}
-            defaultValue={set.reps ? String(set.reps) : ''}
-            onChangeText={(t) => updateSet(exerciseId, i, { reps: parseInt(t, 10) || 0 })}
-          />
-          <Pressable
-            style={styles.colDone}
-            onPress={() => {
-              const wasDone = set.done;
-              toggleDone(exerciseId, i);
-              if (!wasDone) onSetCompleted();
-            }}
-            onLongPress={() => removeSet(exerciseId, i)}>
-            <Ionicons
-              name={set.done ? 'checkmark-circle' : 'ellipse-outline'}
-              size={28}
-              color={set.done ? colors.good : colors.textFaint}
-            />
-          </Pressable>
-        </Row>
-      ))}
-
-      <Pressable onPress={() => addSet(exerciseId)} style={styles.addSet}>
-        <Ionicons name="add" size={16} color={accent} />
-        <Text style={[styles.addSetText, { color: accent }]}>Add set</Text>
+      <View style={styles.stepCenter}>
+        <Text style={styles.stepValue}>{value}</Text>
+        <Text style={type.caption}>{label}</Text>
+      </View>
+      <Pressable onPress={onPlus} style={styles.stepBtn} hitSlop={6}>
+        <Ionicons name="add" size={22} color={colors.text} />
       </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  timerRow: { gap: space.xs, alignItems: 'center' },
-  timer: { color: colors.text, fontSize: font.h3, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  timerLabel: { color: colors.textFaint, fontSize: font.small },
-  block: {
+  loading: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
+  container: { flex: 1, backgroundColor: colors.bg },
+  dots: { flexDirection: 'row', gap: 4, paddingHorizontal: space.lg, paddingTop: space.sm },
+  dot: { height: 4, borderRadius: 2 },
+  scroll: { padding: space.lg, paddingBottom: 140 },
+  exName: { ...type.display, fontSize: 30, marginTop: space.sm },
+  editor: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: space.lg,
-    gap: space.xs,
+    borderRadius: radius.xl,
+    padding: space.xl,
   },
-  blockName: { color: colors.text, fontSize: font.h3, fontWeight: '800', flex: 1 },
-  blockMeta: { color: colors.textDim, fontSize: font.small, marginBottom: space.sm },
-  colHead: { marginTop: space.xs, paddingHorizontal: space.xs },
-  colLbl: { color: colors.textFaint, fontSize: font.tiny, fontWeight: '700', textAlign: 'center' },
-  colSet: { width: 36, color: colors.textDim, fontWeight: '700', textAlign: 'center', fontSize: font.small },
-  colInput: { flex: 1 },
-  colDone: { width: 44, alignItems: 'center', justifyContent: 'center' },
+  steppers: { flexDirection: 'row', gap: space.lg, marginTop: space.lg },
+  stepper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface2,
+    borderRadius: radius.lg,
+    padding: space.sm,
+  },
+  stepBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceHi,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepCenter: { alignItems: 'center', flex: 1 },
+  stepValue: { ...type.display, fontSize: 28, fontVariant: ['tabular-nums'] },
+  setList: { gap: space.sm, marginTop: space.xl },
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: space.xs,
-    borderRadius: radius.sm,
+    gap: space.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
   },
-  input: {
-    backgroundColor: colors.surface2,
-    borderRadius: radius.sm,
-    marginHorizontal: space.xs,
-    paddingVertical: space.sm,
-    color: colors.text,
-    fontSize: font.body,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  addSet: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.xs,
-    paddingVertical: space.sm,
-    marginTop: space.xs,
-  },
-  addSetText: { fontWeight: '700', fontSize: font.small },
+  setNo: { ...type.caption, width: 20, fontWeight: '800', color: colors.textDim },
+  setVal: { ...type.headline, flex: 1, fontVariant: ['tabular-nums'] },
+  nav: { flexDirection: 'row', justifyContent: 'space-between', marginTop: space.xl },
+  navBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: space.sm },
 });

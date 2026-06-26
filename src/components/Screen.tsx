@@ -30,5 +30,10 @@ export function Screen({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: space.lg, paddingBottom: space.xxl * 2, gap: space.md },
+  content: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.sm,
+    paddingBottom: space.huge * 2,
+    gap: space.xl,
+  },
 });

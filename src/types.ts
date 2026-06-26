@@ -89,6 +89,11 @@ export interface WorkoutSession {
   notes?: string;
 }
 
+export interface BodyweightEntry {
+  dateISO: string;
+  kg: number;
+}
+
 export type Units = 'kg' | 'lb';
 
 export interface Settings {

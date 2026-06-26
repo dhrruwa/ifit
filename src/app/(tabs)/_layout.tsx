@@ -7,14 +7,15 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: colors.bg },
-        headerTintColor: colors.text,
-        headerTitleStyle: { fontWeight: '800' },
-        headerShadowVisible: false,
+        headerShown: false,
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
+          borderTopWidth: 1,
+          height: 88,
+          paddingTop: 8,
         },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textFaint,
         sceneStyle: { backgroundColor: colors.bg },
@@ -22,31 +23,36 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Week',
-          tabBarIcon: ({ color, size }) => <Ionicons name="calendar" color={color} size={size} />,
+          title: 'Home',
+          tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="workout"
+        options={{
+          title: 'Workout',
+          tabBarIcon: ({ color, size }) => <Ionicons name="barbell" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="library"
         options={{
           title: 'Library',
-          tabBarIcon: ({ color, size }) => <Ionicons name="barbell" color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="grid" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
           title: 'Progress',
-          tabBarIcon: ({ color, size }) => <Ionicons name="trending-up" color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="stats-chart" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="info"
         options={{
-          title: 'Principles',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="book" color={color} size={size} />
-          ),
+          title: 'Profile',
+          tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} />,
         }}
       />
     </Tabs>

@@ -1,142 +1,169 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/Screen';
-import { Body, Card, Row, SectionTitle } from '@/components/ui';
-import { ABS_NOTE, NON_NEGOTIABLES, ORDERING_RULES, SELECTION_RULES } from '@/data/rules';
+import { ListRow, PrimaryButton, SectionHeader, SegmentedControl, Surface } from '@/components/kit';
+import { haptic } from '@/lib/motion';
+import { currentStreak } from '@/lib/stats';
+import { toDisplay, toKg } from '@/lib/units';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { Units } from '@/types';
-import { colors, font, radius, space } from '@/theme';
+import { colors, radius, space, type } from '@/theme';
 
-export default function InfoScreen() {
+export default function ProfileScreen() {
+  const name = useSettingsStore((s) => s.name);
+  const setName = useSettingsStore((s) => s.setName);
   const units = useSettingsStore((s) => s.units);
   const setUnits = useSettingsStore((s) => s.setUnits);
   const bodyweightKg = useSettingsStore((s) => s.bodyweightKg);
   const setBodyweight = useSettingsStore((s) => s.setBodyweight);
+  const logBodyweight = useSettingsStore((s) => s.logBodyweight);
+  const sessions = useWorkoutStore((s) => s.sessions);
 
-  // Protein target derived from bodyweight (1.8 g/kg midpoint of 1.6–2.0).
+  const streak = currentStreak(sessions);
   const proteinLow = Math.round(bodyweightKg * 1.6);
   const proteinHigh = Math.round(bodyweightKg * 2.0);
+  const step = units === 'kg' ? 0.5 : 1;
+  const bumpWeight = (d: number) => {
+    setBodyweight(Math.max(20, toKg(toDisplay(bodyweightKg, units) + d, units)));
+    haptic.select();
+  };
+  const initial = (name.trim()[0] || 'A').toUpperCase();
 
   return (
     <Screen>
-      {/* Settings */}
-      <SectionTitle>Settings</SectionTitle>
-      <Card>
-        <Row style={{ justifyContent: 'space-between' }}>
-          <Body style={{ fontWeight: '700' }}>Units</Body>
-          <Row style={styles.toggle}>
-            {(['kg', 'lb'] as Units[]).map((u) => (
-              <Pressable
-                key={u}
-                onPress={() => setUnits(u)}
-                style={[styles.toggleBtn, units === u && { backgroundColor: colors.accent }]}>
-                <Text style={[styles.toggleText, units === u && { color: '#08121F' }]}>{u}</Text>
-              </Pressable>
-            ))}
-          </Row>
-        </Row>
-        <View style={styles.divider} />
-        <Row style={{ justifyContent: 'space-between' }}>
-          <Body style={{ fontWeight: '700' }}>Bodyweight</Body>
-          <Row style={{ gap: space.md, alignItems: 'center' }}>
-            <Pressable hitSlop={8} onPress={() => setBodyweight(Math.max(30, bodyweightKg - 1))}>
-              <Ionicons name="remove-circle-outline" size={26} color={colors.textDim} />
-            </Pressable>
-            <Text style={styles.bwValue}>
-              {units === 'kg' ? Math.round(bodyweightKg) : Math.round(bodyweightKg / 0.45359237)}
-              {units}
-            </Text>
-            <Pressable hitSlop={8} onPress={() => setBodyweight(bodyweightKg + 1)}>
-              <Ionicons name="add-circle-outline" size={26} color={colors.textDim} />
-            </Pressable>
-          </Row>
-        </Row>
-        <View style={styles.divider} />
-        <Row style={{ justifyContent: 'space-between' }}>
-          <Body style={{ fontWeight: '700' }}>Daily protein target</Body>
-          <Text style={[styles.bwValue, { color: colors.good }]}>
-            {proteinLow}–{proteinHigh} g
-          </Text>
-        </Row>
-      </Card>
+      <Text style={[type.display, { marginTop: space.sm }]}>Profile</Text>
 
-      {/* Non-negotiables */}
-      <SectionTitle>The Non-Negotiables</SectionTitle>
-      <Card accent={colors.good}>
-        {NON_NEGOTIABLES.map((n, i) => (
-          <View key={n.title} style={[styles.nnRow, i > 0 && styles.divided]}>
-            <Text style={styles.nnTitle}>{n.title}</Text>
-            <Body style={{ color: colors.textDim }}>{n.detail}</Body>
+      {/* Identity */}
+      <Surface style={styles.idCard}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initial}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={type.label}>Your name</Text>
+          <TextInput
+            style={styles.nameInput}
+            value={name}
+            onChangeText={setName}
+            placeholder="Add your name"
+            placeholderTextColor={colors.textFaint}
+            returnKeyType="done"
+          />
+        </View>
+        <View style={styles.idStat}>
+          <Text style={styles.idStatVal}>{streak}</Text>
+          <Text style={type.caption}>streak</Text>
+        </View>
+      </Surface>
+
+      {/* Bodyweight */}
+      <View>
+        <SectionHeader title="Bodyweight" />
+        <Surface>
+          <View style={styles.bwRow}>
+            <Pressable onPress={() => bumpWeight(-step)} style={styles.bwBtn} hitSlop={6}>
+              <Ionicons name="remove" size={22} color={colors.text} />
+            </Pressable>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={styles.bwValue}>{toDisplay(bodyweightKg, units)}</Text>
+              <Text style={type.caption}>{units}</Text>
+            </View>
+            <Pressable onPress={() => bumpWeight(step)} style={styles.bwBtn} hitSlop={6}>
+              <Ionicons name="add" size={22} color={colors.text} />
+            </Pressable>
           </View>
-        ))}
-      </Card>
+          <PrimaryButton
+            label="Log today's weight"
+            icon="trending-up"
+            color={colors.surfaceHi}
+            textColor={colors.text}
+            onPress={() => {
+              logBodyweight(bodyweightKg);
+              haptic.success();
+            }}
+            style={{ marginTop: space.lg }}
+          />
+          <Text style={[type.caption, { textAlign: 'center', marginTop: space.sm }]}>
+            Logs a dated entry for your Progress → Weight chart.
+          </Text>
+        </Surface>
+      </View>
 
-      {/* Selection rules */}
-      <SectionTitle>How to select exercises</SectionTitle>
-      <Card>
-        {SELECTION_RULES.map((r, i) => (
-          <RuleRow key={i} n={i + 1} text={r} />
-        ))}
-      </Card>
+      {/* Preferences */}
+      <View>
+        <SectionHeader title="Preferences" />
+        <Surface style={{ gap: space.lg }}>
+          <View style={styles.prefRow}>
+            <Text style={type.body}>Units</Text>
+            <View style={{ width: 140 }}>
+              <SegmentedControl
+                value={units}
+                onChange={(u: Units) => setUnits(u)}
+                options={[
+                  { value: 'kg', label: 'kg' },
+                  { value: 'lb', label: 'lb' },
+                ]}
+              />
+            </View>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.prefRow}>
+            <Text style={type.body}>Daily protein target</Text>
+            <Text style={[type.headline, { color: colors.good }]}>
+              {proteinLow}–{proteinHigh} g
+            </Text>
+          </View>
+        </Surface>
+      </View>
 
-      {/* Ordering rules */}
-      <SectionTitle>How to order them (the flow)</SectionTitle>
-      <Card>
-        {ORDERING_RULES.map((r, i) => (
-          <RuleRow key={i} n={i + 1} text={r} />
-        ))}
-      </Card>
-
-      {/* Abs note */}
-      <SectionTitle>On abs</SectionTitle>
-      <Card accent={colors.warn}>
-        <Body style={{ color: colors.textDim }}>{ABS_NOTE}</Body>
-      </Card>
+      {/* Learn */}
+      <View>
+        <SectionHeader title="Learn" />
+        <Surface padded={false} style={{ paddingHorizontal: space.lg }}>
+          <ListRow
+            title="Training principles"
+            subtitle="Selection & ordering rules, the non-negotiables"
+            left={<Ionicons name="bulb-outline" size={22} color={colors.accent} />}
+            onPress={() => router.push('/learn')}
+          />
+        </Surface>
+      </View>
 
       <Text style={styles.footer}>
-        iFit · built from The Complete 5-Day Training Bible{'\n'}
-        Exercise animations: ExerciseGymGifsDB (jsDelivr) · GIFs © their authors
+        iFit · The 5-Day Training Bible{'\n'}
+        Exercise animations & cues: ExerciseGymGifsDB · © their authors
       </Text>
     </Screen>
   );
 }
 
-function RuleRow({ n, text }: { n: number; text: string }) {
-  return (
-    <Row style={[styles.ruleRow, n > 1 && styles.divided]}>
-      <View style={styles.ruleNum}>
-        <Text style={styles.ruleNumText}>{n}</Text>
-      </View>
-      <Body style={{ flex: 1 }}>{text}</Body>
-    </Row>
-  );
-}
-
 const styles = StyleSheet.create({
-  toggle: { backgroundColor: colors.surface2, borderRadius: radius.sm, padding: 2 },
-  toggleBtn: { paddingHorizontal: space.lg, paddingVertical: space.xs, borderRadius: radius.sm - 2 },
-  toggleText: { color: colors.textDim, fontWeight: '800', fontSize: font.small },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: space.md },
-  bwValue: { color: colors.text, fontSize: font.h3, fontWeight: '800', minWidth: 64, textAlign: 'center' },
-  nnRow: { paddingVertical: space.sm },
-  divided: { borderTopWidth: 1, borderTopColor: colors.border },
-  nnTitle: { color: colors.text, fontSize: font.body, fontWeight: '800' },
-  ruleRow: { gap: space.md, paddingVertical: space.sm, alignItems: 'flex-start' },
-  ruleNum: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  idCard: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: colors.accentDim,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 1,
   },
-  ruleNumText: { color: colors.accent, fontWeight: '800', fontSize: font.small },
-  footer: {
-    color: colors.textFaint,
-    fontSize: font.tiny,
-    textAlign: 'center',
-    marginTop: space.lg,
+  avatarText: { ...type.title, color: colors.accent, fontWeight: '800' },
+  nameInput: { ...type.headline, color: colors.text, paddingVertical: 2, marginTop: 2 },
+  idStat: { alignItems: 'center' },
+  idStatVal: { ...type.title, fontWeight: '800', color: colors.text },
+  bwRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bwBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  bwValue: { ...type.display, fontSize: 36, fontVariant: ['tabular-nums'] },
+  prefRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  divider: { height: 1, backgroundColor: colors.border },
+  footer: { ...type.caption, textAlign: 'center', marginTop: space.lg, lineHeight: 18 },
 });

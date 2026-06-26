@@ -109,9 +109,8 @@ export default function WorkoutScreen() {
   const onFinish = () => {
     const saved = finishWorkout();
     if (saved) {
-      haptic.success();
       router.dismissAll?.();
-      router.replace('/history');
+      router.replace({ pathname: '/workout/complete', params: { sid: saved.id } });
     } else {
       Alert.alert('Nothing logged', 'Complete at least one set before finishing.');
     }

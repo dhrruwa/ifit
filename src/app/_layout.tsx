@@ -24,7 +24,9 @@ export default function RootLayout() {
             name="workout/[id]"
             options={{ title: 'Workout', headerBackVisible: false }}
           />
+          <Stack.Screen name="workout/complete" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="exercise/[id]" options={{ title: '' }} />
+          <Stack.Screen name="learn" options={{ title: 'Learn' }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

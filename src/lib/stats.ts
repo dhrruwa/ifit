@@ -93,6 +93,25 @@ export function recentExerciseIds(sessions: WorkoutSession[], limit = 8): string
   return seen.slice(0, limit);
 }
 
+/** Exercises in `session` that set a new all-time best (vs every other session). */
+export function newPRsForSession(sessions: WorkoutSession[], session: WorkoutSession) {
+  const others = sessions.filter((s) => s.id !== session.id);
+  const prs: { exerciseId: string; weight: number; reps: number; e1rm: number }[] = [];
+  for (const entry of session.entries) {
+    let top: { weight: number; reps: number; e1rm: number } | null = null;
+    for (const set of entry.sets) {
+      const e = est1RM(set.weight, set.reps);
+      if (e > 0 && (!top || e > top.e1rm)) top = { weight: set.weight, reps: set.reps, e1rm: e };
+    }
+    if (!top) continue;
+    const prior = bestSet(others, entry.exerciseId);
+    if (!prior || top.e1rm > prior.e1rm) {
+      prs.push({ exerciseId: entry.exerciseId, ...top });
+    }
+  }
+  return prs;
+}
+
 /** Weekly volume series for the last `weeks` weeks (oldest→newest). */
 export function volumeSeries(sessions: WorkoutSession[], weeks = 8, now: Date = new Date()) {
   const start = weekStart(now);

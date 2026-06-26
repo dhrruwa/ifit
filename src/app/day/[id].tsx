@@ -1,15 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { Screen } from '@/components/Screen';
-import { Body, Button, Card, Pill, Row, SectionTitle } from '@/components/ui';
+import { ListRow, PrimaryButton, SectionHeader, Surface, Tag } from '@/components/kit';
 import { getExercise } from '@/data/exercises';
 import { getDay } from '@/data/program';
 import { STRETCHES } from '@/data/stretches';
 import { WARMUPS } from '@/data/warmups';
+import { difficultyOf } from '@/lib/difficulty';
+import { haptic } from '@/lib/motion';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
-import { colors, dayColors, font, radius, space } from '@/theme';
+import { colors, dayColors, radius, space, type } from '@/theme';
 
 export default function DayScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -20,7 +23,7 @@ export default function DayScreen() {
   if (!day) {
     return (
       <Screen>
-        <Body>Day not found.</Body>
+        <Text style={type.body}>Day not found.</Text>
       </Screen>
     );
   }
@@ -28,119 +31,111 @@ export default function DayScreen() {
   const accent = dayColors[day.id];
   const warmup = day.warmupId ? WARMUPS[day.warmupId] : null;
   const stretch = day.stretchKey ? STRETCHES[day.stretchKey] : null;
+  const sets = day.slots.reduce((n, s) => n + s.sets, 0);
 
   const onStart = () => {
     if (!active) startWorkout(day.id);
+    haptic.press();
     router.push(`/workout/${day.id}`);
   };
 
   return (
     <>
-      <Stack.Screen options={{ title: day.name, headerTintColor: accent }} />
+      <Stack.Screen options={{ title: '', headerTintColor: accent }} />
       <Screen>
-        {/* Heading */}
         <View>
-          <Row style={{ gap: space.sm }}>
-            <Text style={styles.bigName}>{day.name}</Text>
-            <Text style={{ fontSize: 24 }}>{day.emoji}</Text>
-          </Row>
-          <Text style={styles.focus}>{day.focus}</Text>
+          <Tag label={day.focus} color={accent} />
+          <Text style={[type.display, { fontSize: 40, marginTop: space.md }]}>{day.name}</Text>
         </View>
 
         {day.rest ? (
-          <Card accent={accent}>
-            <Row style={{ gap: space.sm }}>
-              <Ionicons name="bed-outline" size={20} color={colors.textDim} />
-              <Body style={{ flex: 1 }}>
-                Rest day. Recovery is when you grow — walk, stretch, sleep 7–9 hrs, and hit your protein.
-              </Body>
-            </Row>
-          </Card>
+          <Surface style={styles.rest}>
+            <Ionicons name="bed-outline" size={28} color={colors.textDim} />
+            <Text style={[type.body, { flex: 1 }]}>
+              Rest day. Recovery is when you grow — walk, stretch, sleep 7–9 hrs, and hit your protein.
+            </Text>
+          </Surface>
         ) : (
           <>
             {day.flow && (
-              <Card accent={accent}>
-                <SectionTitle style={{ marginBottom: space.xs }}>The Flow</SectionTitle>
-                <Body style={{ color: colors.textDim }}>{day.flow}</Body>
-              </Card>
+              <Surface>
+                <Text style={type.label}>The flow</Text>
+                <Text style={[type.bodyDim, { marginTop: space.sm }]}>{day.flow}</Text>
+              </Surface>
             )}
+
+            {/* Exercises */}
+            <View>
+              <SectionHeader title={`Session · ${day.slots.length} exercises · ${sets} sets`} />
+              <Surface padded={false} style={{ paddingHorizontal: space.lg }}>
+                {day.slots.map((slot, i) => {
+                  const ex = getExercise(slot.exerciseId);
+                  if (!ex) return null;
+                  const diff = difficultyOf(ex);
+                  return (
+                    <Animated.View
+                      key={slot.exerciseId}
+                      entering={FadeInDown.duration(220).delay(i * 35)}
+                      style={i > 0 ? styles.divider : undefined}>
+                      <ListRow
+                        title={ex.name}
+                        subtitle={`${ex.muscleGroup} · ${ex.regionOrHead}`}
+                        left={
+                          <View style={[styles.idx, { backgroundColor: accent + '22' }]}>
+                            <Text style={[styles.idxText, { color: accent }]}>{i + 1}</Text>
+                          </View>
+                        }
+                        right={
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={[type.headline, { color: accent }]}>
+                              {slot.sets}×{slot.reps}
+                            </Text>
+                            <Text style={[type.caption, { color: diff.color }]}>{diff.label}</Text>
+                          </View>
+                        }
+                        onPress={() => router.push(`/exercise/${ex.id}`)}
+                      />
+                    </Animated.View>
+                  );
+                })}
+              </Surface>
+            </View>
 
             {/* Warm-up */}
             {warmup && (
               <View>
-                <SectionTitle>Warm-up · {warmup.title}</SectionTitle>
-                <Card>
+                <SectionHeader title={`Warm-up · ${warmup.title}`} />
+                <Surface>
                   {warmup.steps.map((s, i) => (
-                    <View key={i} style={[styles.warmRow, i > 0 && styles.divided]}>
-                      <Text style={styles.warmMove}>{s.movement}</Text>
-                      <Row style={{ justifyContent: 'space-between', marginTop: 2 }}>
-                        <Text style={styles.warmPurpose}>{s.purpose}</Text>
-                        <Text style={[styles.warmAmount, { color: accent }]}>{s.amount}</Text>
-                      </Row>
+                    <View key={i} style={[styles.warmRow, i > 0 && styles.divider]}>
+                      <Text style={[type.body, { flex: 1 }]}>{s.movement}</Text>
+                      <Text style={[type.caption, { color: accent }]}>{s.amount}</Text>
                     </View>
                   ))}
-                  {warmup.tweaks && (
-                    <View style={[styles.tweak, { borderColor: accent + '44' }]}>
-                      <Text style={styles.tweakText}>💡 {warmup.tweaks}</Text>
-                    </View>
-                  )}
-                </Card>
+                </Surface>
               </View>
             )}
-
-            {/* Exercises */}
-            <SectionTitle>The Session · {day.slots.length} exercises</SectionTitle>
-            <View style={{ gap: space.sm }}>
-              {day.slots.map((slot, i) => {
-                const ex = getExercise(slot.exerciseId);
-                if (!ex) return null;
-                return (
-                  <Card
-                    key={slot.exerciseId}
-                    onPress={() => router.push(`/exercise/${ex.id}`)}>
-                    <Row style={{ gap: space.md }}>
-                      <View style={[styles.idx, { backgroundColor: accent + '22' }]}>
-                        <Text style={[styles.idxText, { color: accent }]}>{i + 1}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.exName}>{ex.name}</Text>
-                        <Text style={styles.exMeta}>
-                          {ex.muscleGroup} · {ex.regionOrHead}
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={[styles.setsReps, { color: accent }]}>
-                          {slot.sets}×{slot.reps}
-                        </Text>
-                        {ex.compound && <Pill label="COMPOUND" color={colors.warn} />}
-                      </View>
-                    </Row>
-                  </Card>
-                );
-              })}
-            </View>
 
             {/* Stretches */}
             {stretch && (
               <View>
-                <SectionTitle>Post-workout stretches</SectionTitle>
-                <Card>
-                  {stretch.stretches.map((s, i) => (
-                    <Row key={i} style={[styles.stretchRow, i > 0 && styles.divided]}>
-                      <Ionicons name="leaf-outline" size={15} color={colors.good} />
-                      <Body style={{ flex: 1 }}>{s}</Body>
-                    </Row>
-                  ))}
-                  <Text style={styles.holdNote}>Hold each 20–30 sec, both sides.</Text>
-                </Card>
+                <SectionHeader title="Post-workout stretches" />
+                <Surface>
+                  <View style={styles.stretchTags}>
+                    {stretch.stretches.map((s, i) => (
+                      <Tag key={i} label={s} color={colors.good} />
+                    ))}
+                  </View>
+                  <Text style={[type.caption, { marginTop: space.md }]}>Hold each 20–30 sec, both sides.</Text>
+                </Surface>
               </View>
             )}
 
-            <Button
-              label={active ? 'Continue workout' : 'Start workout'}
-              onPress={onStart}
+            <PrimaryButton
+              label={active ? 'Continue Workout' : 'Start Workout'}
+              icon="play"
               color={active ? colors.good : accent}
-              style={{ marginTop: space.sm }}
+              onPress={onStart}
             />
           </>
         )}
@@ -150,24 +145,10 @@ export default function DayScreen() {
 }
 
 const styles = StyleSheet.create({
-  bigName: { color: colors.text, fontSize: font.h1, fontWeight: '900' },
-  focus: { color: colors.textDim, fontSize: font.body, marginTop: 2 },
-  warmRow: { paddingVertical: space.sm },
-  divided: { borderTopWidth: 1, borderTopColor: colors.border },
-  warmMove: { color: colors.text, fontSize: font.body, fontWeight: '600' },
-  warmPurpose: { color: colors.textFaint, fontSize: font.small, flex: 1 },
-  warmAmount: { fontSize: font.small, fontWeight: '700' },
-  tweak: {
-    marginTop: space.sm,
-    borderTopWidth: 1,
-    paddingTop: space.sm,
-  },
-  tweakText: { color: colors.textDim, fontSize: font.small, lineHeight: 19 },
-  idx: { width: 30, height: 30, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
-  idxText: { fontWeight: '800', fontSize: font.body },
-  exName: { color: colors.text, fontSize: font.body, fontWeight: '700' },
-  exMeta: { color: colors.textDim, fontSize: font.small, marginTop: 2 },
-  setsReps: { fontSize: font.h3, fontWeight: '800' },
-  stretchRow: { gap: space.sm, paddingVertical: space.sm, alignItems: 'center' },
-  holdNote: { color: colors.textFaint, fontSize: font.tiny, marginTop: space.sm, fontStyle: 'italic' },
+  rest: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
+  divider: { borderTopWidth: 1, borderTopColor: colors.border },
+  warmRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
+  idx: { width: 32, height: 32, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
+  idxText: { fontWeight: '800', fontSize: 15 },
+  stretchTags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
 });

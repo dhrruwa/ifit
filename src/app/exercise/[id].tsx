@@ -1,18 +1,19 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ExerciseGif } from '@/components/ExerciseGif';
 import { MiniLineChart } from '@/components/MiniLineChart';
 import { Screen } from '@/components/Screen';
-import { Body, Card, Pill, Row, SectionTitle } from '@/components/ui';
+import { SectionHeader, Surface, Tag } from '@/components/kit';
 import { getExercise } from '@/data/exercises';
+import { getMeta } from '@/data/exerciseMeta';
 import { PROGRAM } from '@/data/program';
-import { ANATOMY } from '@/data/rules';
+import { difficultyOf } from '@/lib/difficulty';
 import { bestSet, progressSeries } from '@/lib/prs';
 import { toDisplay } from '@/lib/units';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
-import { colors, font, radius, space } from '@/theme';
+import { colors, space, type } from '@/theme';
 
 export default function ExerciseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -23,51 +24,84 @@ export default function ExerciseScreen() {
   if (!ex) {
     return (
       <Screen>
-        <Body>Exercise not found.</Body>
+        <Text style={type.body}>Exercise not found.</Text>
       </Screen>
     );
   }
 
-  const anatomy = ANATOMY[ex.muscleGroup] ?? [];
+  const meta = getMeta(ex.id);
+  const diff = difficultyOf(ex);
   const pr = bestSet(sessions, ex.id);
   const series = progressSeries(sessions, ex.id);
   const appearsIn = PROGRAM.filter((d) => d.slots.some((s) => s.exerciseId === ex.id));
 
   return (
     <>
-      <Stack.Screen options={{ title: ex.muscleGroup }} />
+      <Stack.Screen options={{ title: '' }} />
       <Screen>
         <View>
-          <Text style={styles.name}>{ex.name}</Text>
-          <Row style={{ gap: space.sm, marginTop: space.sm, flexWrap: 'wrap' }}>
-            <Pill label={ex.muscleGroup} color={colors.accent} />
-            <Pill label={ex.equipment} color={colors.textDim} />
-            {ex.compound && <Pill label="COMPOUND" color={colors.warn} />}
-          </Row>
+          <Text style={type.display}>{ex.name}</Text>
+          <View style={styles.tags}>
+            <Tag label={ex.muscleGroup} color={colors.accent} />
+            <Tag label={ex.equipment} color={colors.textDim} />
+            <Tag label={diff.label} color={diff.color} />
+            {ex.compound && <Tag label="Compound" color={colors.warn} />}
+          </View>
         </View>
 
-        <ExerciseGif exerciseId={ex.id} height={240} />
+        <ExerciseGif exerciseId={ex.id} height={230} />
 
-        <Card accent={colors.accent}>
-          <SectionTitle style={{ marginBottom: space.xs }}>Targets · {ex.regionOrHead}</SectionTitle>
-          <Body>{ex.why}</Body>
-        </Card>
+        {/* Primary / secondary muscles */}
+        <Surface style={styles.muscles}>
+          <View style={{ flex: 1 }}>
+            <Text style={type.label}>Primary</Text>
+            <Text style={[type.headline, { marginTop: 4 }]}>{ex.muscleGroup}</Text>
+            <Text style={type.caption}>{ex.regionOrHead}</Text>
+          </View>
+          <View style={styles.muscleDivider} />
+          <View style={{ flex: 1 }}>
+            <Text style={type.label}>Secondary</Text>
+            <Text style={[type.headline, { marginTop: 4 }]}>
+              {meta?.secondaryMuscles.length ? meta.secondaryMuscles.join(', ') : '—'}
+            </Text>
+          </View>
+        </Surface>
 
-        {/* Personal progress */}
-        {pr ? (
+        {/* Why it's programmed */}
+        <Surface>
+          <Text style={type.label}>Why this exercise</Text>
+          <Text style={[type.body, { marginTop: space.sm }]}>{ex.why}</Text>
+        </Surface>
+
+        {/* How to perform */}
+        {meta?.instructions.length ? (
           <View>
-            <SectionTitle>Your progress</SectionTitle>
-            <Card>
-              <Row style={{ justifyContent: 'space-between', marginBottom: space.sm }}>
-                <Pill
-                  label={`PR  ${toDisplay(pr.weight, units)}${units} × ${pr.reps}`}
-                  color={colors.warn}
-                />
-                <Text style={styles.e1rm}>
+            <SectionHeader title="How to perform" />
+            <Surface>
+              {meta.instructions.map((step, i) => (
+                <View key={i} style={[styles.stepRow, i > 0 && styles.stepDivider]}>
+                  <View style={styles.stepNum}>
+                    <Text style={styles.stepNumText}>{i + 1}</Text>
+                  </View>
+                  <Text style={[type.body, { flex: 1 }]}>{step}</Text>
+                </View>
+              ))}
+            </Surface>
+          </View>
+        ) : null}
+
+        {/* Progress */}
+        {pr && (
+          <View>
+            <SectionHeader title="Your progress" />
+            <Surface>
+              <View style={styles.prRow}>
+                <Tag label={`PR · ${toDisplay(pr.weight, units)}${units} × ${pr.reps}`} color={colors.warn} />
+                <Text style={type.caption}>
                   est. 1RM {toDisplay(pr.e1rm, units)}
                   {units}
                 </Text>
-              </Row>
+              </View>
               {series.length >= 2 ? (
                 <MiniLineChart
                   data={series.map((p) => ({ value: toDisplay(p.value, units), label: p.label }))}
@@ -76,38 +110,23 @@ export default function ExerciseScreen() {
                   suffix={units}
                 />
               ) : (
-                <Body style={{ color: colors.textDim }}>
+                <Text style={[type.bodyDim, { marginTop: space.sm }]}>
                   Log this exercise again to chart your trend.
-                </Body>
+                </Text>
               )}
-            </Card>
+            </Surface>
           </View>
-        ) : null}
+        )}
 
-        {/* Anatomy */}
-        <View>
-          <SectionTitle>{ex.muscleGroup} anatomy</SectionTitle>
-          <Card>
-            {anatomy.map((row, i) => (
-              <View key={i} style={[styles.anRow, i > 0 && styles.divided]}>
-                <Text style={styles.anPart}>{row.part}</Text>
-                <Row style={{ justifyContent: 'space-between', marginTop: 2 }}>
-                  <Text style={styles.anDoes}>{row.does}</Text>
-                  <Text style={styles.anTarget}>{row.target}</Text>
-                </Row>
-              </View>
-            ))}
-          </Card>
-        </View>
-
+        {/* In program */}
         {appearsIn.length > 0 && (
           <View>
-            <SectionTitle>In your program</SectionTitle>
-            <Row style={{ gap: space.sm, flexWrap: 'wrap' }}>
+            <SectionHeader title="In your program" />
+            <View style={styles.programTags}>
               {appearsIn.map((d) => (
-                <Pill key={d.id} label={`${d.name}`} color={colors.good} />
+                <Tag key={d.id} label={d.name} color={colors.good} />
               ))}
-            </Row>
+            </View>
           </View>
         )}
       </Screen>
@@ -116,11 +135,20 @@ export default function ExerciseScreen() {
 }
 
 const styles = StyleSheet.create({
-  name: { color: colors.text, fontSize: font.h1, fontWeight: '900' },
-  e1rm: { color: colors.textDim, fontSize: font.small, fontWeight: '600' },
-  anRow: { paddingVertical: space.sm },
-  divided: { borderTopWidth: 1, borderTopColor: colors.border },
-  anPart: { color: colors.text, fontSize: font.body, fontWeight: '700' },
-  anDoes: { color: colors.textDim, fontSize: font.small, flex: 1 },
-  anTarget: { color: colors.accent, fontSize: font.small, fontWeight: '600', textAlign: 'right', flex: 1 },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.md },
+  muscles: { flexDirection: 'row', alignItems: 'center' },
+  muscleDivider: { width: 1, alignSelf: 'stretch', backgroundColor: colors.border, marginHorizontal: space.lg },
+  stepRow: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start', paddingVertical: space.md },
+  stepDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  stepNum: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.accentDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepNumText: { color: colors.accent, fontWeight: '800', fontSize: 13 },
+  prRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.md },
+  programTags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
 });

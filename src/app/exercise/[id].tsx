@@ -1,6 +1,7 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { ExerciseGif } from '@/components/ExerciseGif';
 import { MiniLineChart } from '@/components/MiniLineChart';
 import { Screen } from '@/components/Screen';
 import { Body, Card, Pill, Row, SectionTitle } from '@/components/ui';
@@ -44,6 +45,8 @@ export default function ExerciseScreen() {
             {ex.compound && <Pill label="COMPOUND" color={colors.warn} />}
           </Row>
         </View>
+
+        <ExerciseGif exerciseId={ex.id} height={240} />
 
         <Card accent={colors.accent}>
           <SectionTitle style={{ marginBottom: space.xs }}>Targets · {ex.regionOrHead}</SectionTitle>

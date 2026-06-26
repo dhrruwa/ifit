@@ -94,7 +94,10 @@ export default function InfoScreen() {
         <Body style={{ color: colors.textDim }}>{ABS_NOTE}</Body>
       </Card>
 
-      <Text style={styles.footer}>iFit · built from The Complete 5-Day Training Bible</Text>
+      <Text style={styles.footer}>
+        iFit · built from The Complete 5-Day Training Bible{'\n'}
+        Exercise animations: ExerciseGymGifsDB (jsDelivr) · GIFs © their authors
+      </Text>
     </Screen>
   );
 }

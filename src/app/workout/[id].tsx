@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 
+import { ExerciseGif } from '@/components/ExerciseGif';
 import { RestTimer } from '@/components/RestTimer';
 import { Screen } from '@/components/Screen';
 import { Body, Pill, Row } from '@/components/ui';
@@ -177,6 +178,8 @@ function ExerciseBlock({
         </Row>
         <Text style={styles.blockMeta}>{ex.regionOrHead}</Text>
       </Pressable>
+
+      <ExerciseGif exerciseId={exerciseId} height={150} style={{ marginTop: space.sm }} />
 
       <Row style={styles.colHead}>
         <Text style={[styles.colSet]}>SET</Text>
